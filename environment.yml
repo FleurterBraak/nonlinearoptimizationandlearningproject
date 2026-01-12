@@ -1,0 +1,12 @@
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.10
+  - matplotlib
+  - tqdm
+  - numpy
+  - mnist
+  - pycairo
+  - pytorch
+  - python-igraph
