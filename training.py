@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm  # gives progression bars when running code
 
-from activation_functions import logi, softmax
+from activation_functions import *
 from data_loader import DataLoader
 from loss_functions import mse_loss
 from models import NeuralNetwork
@@ -56,7 +56,7 @@ test_dataset_size = len(test_dataset)
 # Initialize a neural network with some layers and the default activation functions.
 neural_network = NeuralNetwork(
     layers=[784, 256, 128, 64, 10],
-    activation_functions=[logi, logi, logi, softmax]
+    activation_functions=[elu, elu, elu, softmax]
 )
 # OR load the parameters of some other trained network from disk
 # neural_network = NeuralNetwork(

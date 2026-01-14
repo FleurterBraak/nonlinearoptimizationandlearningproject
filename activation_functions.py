@@ -112,7 +112,7 @@ def elu(x: Value, a=1) -> Value:  # ELU (exponential linear unit)
     result = Value(data, f"elu({x.expr})", (x,))
 
     def _backward_gradient_step():
-        data.grad += (
+        x.grad += (
             np.heaviside(x.data, 1)
             + np.heaviside(-x.data, 0) * a * np.exp(x.data)
         ) * result.grad
