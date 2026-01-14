@@ -112,16 +112,28 @@ def softsign(x: Value) -> Value:  # SoftSign
 def elu(x: Value, a=1) -> Value:  # ELU (exponential linear unit)
     #data = x.data * np.heaviside(x.data, 1) + a * (np.exp(x.data) - 1) * np.heaviside(-x.data, 0)
     # the above works for smaller values, but for large values of x.data it causes an overflow. 
+    if np.ndim(x.data) == 1:
+        data = np.array([x.data[i] if x.data[i] >= 0 else a * (np.exp(x.data[i]) - 1) for i in range(len(x.data))])
+    else:
+        m,n = np.shape(x.data)
+        data = np.zeros_like(x.data)
+        for i in range(m):
+            for j in range(n):
+                data[i][j] = x.data[i][j] if x.data[i][j] >= 0 else a * (np.exp(x.data[i][j]) - 1)
 
-    data = np.array([x.data[i] if x.data[i] <= 0 else a * (np.exp(x.data) - 1) for i in range(len(x.data))])
     # elu(x) = {x if x >= 0, a(exp(x)-1) if x < 0}
     result = Value(data, f"elu({x.expr})", (x,))
 
     def _backward_gradient_step():
-        x.grad += (
-            np.heaviside(x.data, 1)
-            + np.heaviside(-x.data, 0) * a * np.exp(x.data)
-        ) * result.grad
+        if np.ndim(x.data) == 1:
+            gr = np.array([1 if x.data[i] >= 0 else a * np.exp(x.data[i]) for i in range(len(x.data))])
+        else:
+            m,n = np.shape(x.data)
+            gr = np.zeros_like(x.data)
+            for i in range(m):
+                for j in range(n):
+                    data[i][j] = 1 if x.data[i][j] >= 0 else a * np.exp(x.data[i][j])
+        x.grad += gr * result.grad
         # d/dx elu = {1 if x >= 0, a * exp(x) if x<0}
 
     result._backward_gradient_step = _backward_gradient_step

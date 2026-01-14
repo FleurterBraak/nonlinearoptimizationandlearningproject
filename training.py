@@ -66,7 +66,7 @@ neural_network = NeuralNetwork(
 
 # Set training configuration
 learning_rate = 3e-3
-epochs = 10
+epochs = 3
 
 # Do the full training algorithm
 train_losses = []
