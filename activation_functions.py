@@ -110,7 +110,10 @@ def softsign(x: Value) -> Value:  # SoftSign
 
 
 def elu(x: Value, a=1) -> Value:  # ELU (exponential linear unit)
-    data = x.data * np.heaviside(x.data, 1) + a * (np.exp(x.data) - 1) * np.heaviside(-x.data, 0)
+    #data = x.data * np.heaviside(x.data, 1) + a * (np.exp(x.data) - 1) * np.heaviside(-x.data, 0)
+    # the above works for smaller values, but for large values of x.data it causes an overflow. 
+
+    data = np.array([x.data[i] if x.data[i] <= 0 else a * (np.exp(x.data) - 1) for i in range(len(x.data))])
     # elu(x) = {x if x >= 0, a(exp(x)-1) if x < 0}
     result = Value(data, f"elu({x.expr})", (x,))
 
@@ -126,7 +129,8 @@ def elu(x: Value, a=1) -> Value:  # ELU (exponential linear unit)
 
 
 def softplus(x: Value) -> Value:  # SoftPlus
-    data = np.log(1 + np.exp(x.data))
+    data = sp.softplus(x.data)
+    #data = np.log(1 + np.exp(x.data))
     # softplus(x) = ln(1 + exp(x))
     result = Value(data, f"sofplus({x.expr})", (x,))
 
