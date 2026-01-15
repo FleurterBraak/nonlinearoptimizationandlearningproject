@@ -1,0 +1,41 @@
+_wandb:
+    value:
+        cli_version: 0.24.0
+        e:
+            gqwlgcflx9rcskrkx8kwsr8dzkejs4b2:
+                codePath: training.py
+                codePathLocal: training.py
+                cpu_count: 4
+                cpu_count_logical: 8
+                disk:
+                    /:
+                        total: "509722226688"
+                        used: "498885091328"
+                email: jelle.roessink@hotmail.com
+                executable: C:\Users\jelle\OneDrive\Documenten\Python\nonlinearoptimizationandlearningproject\.venv\Scripts\python.exe
+                git:
+                    commit: ce20201c666f9a791f304bf50d36e87e64cf0094
+                    remote: https://github.com/FleurterBraak/nonlinearoptimizationandlearningproject.git
+                host: Laptop-2305
+                memory:
+                    total: "8362713088"
+                os: Windows-11-10.0.26200-SP0
+                program: c:\Users\jelle\OneDrive\Documenten\Python\nonlinearoptimizationandlearningproject\training.py
+                python: CPython 3.14.0
+                root: C:\Users\jelle\OneDrive\Documenten\Python\nonlinearoptimizationandlearningproject
+                startedAt: "2026-01-15T12:28:41.690790Z"
+                writerId: gqwlgcflx9rcskrkx8kwsr8dzkejs4b2
+        m: []
+        python_version: 3.14.0
+        t:
+            "3":
+                - 2
+                - 14
+            "4": 3.14.0
+            "5": 0.24.0
+            "8":
+                - 3
+            "12": 0.24.0
+            "13": windows-amd64
+learning_rate:
+    value: 0.0642322964318826

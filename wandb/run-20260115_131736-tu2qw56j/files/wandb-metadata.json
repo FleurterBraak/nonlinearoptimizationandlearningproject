@@ -1,0 +1,28 @@
+{
+  "os":  "Windows-11-10.0.26200-SP0",
+  "python":  "CPython 3.14.0",
+  "startedAt":  "2026-01-15T12:17:36.806502Z",
+  "program":  "c:\\Users\\jelle\\OneDrive\\Documenten\\Python\\nonlinearoptimizationandlearningproject\\training.py",
+  "codePath":  "training.py",
+  "codePathLocal":  "training.py",
+  "git":  {
+    "remote":  "https://github.com/FleurterBraak/nonlinearoptimizationandlearningproject.git",
+    "commit":  "ce20201c666f9a791f304bf50d36e87e64cf0094"
+  },
+  "email":  "jelle.roessink@hotmail.com",
+  "root":  "C:\\Users\\jelle\\OneDrive\\Documenten\\Python\\nonlinearoptimizationandlearningproject",
+  "host":  "Laptop-2305",
+  "executable":  "C:\\Users\\jelle\\OneDrive\\Documenten\\Python\\nonlinearoptimizationandlearningproject\\.venv\\Scripts\\python.exe",
+  "cpu_count":  4,
+  "cpu_count_logical":  8,
+  "disk":  {
+    "/":  {
+      "total":  "509722226688",
+      "used":  "498884648960"
+    }
+  },
+  "memory":  {
+    "total":  "8362713088"
+  },
+  "writerId":  "5yrfcbytl4h1c2i9by978elsr9n2py1b"
+}

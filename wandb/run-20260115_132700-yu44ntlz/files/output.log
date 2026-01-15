@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "c:\Users\jelle\OneDrive\Documenten\Python\nonlinearoptimizationandlearningproject\training.py", line 67, in train
+    neural_network = NeuralNetwork(
+        layers=layers,
+        activation_functions=activation_functions
+    )
+  File "c:\Users\jelle\OneDrive\Documenten\Python\nonlinearoptimizationandlearningproject\models.py", line 23, in __init__
+    if len(activation_functions) != self.number_of_layers:
+       ~~~^^^^^^^^^^^^^^^^^^^^^^
+TypeError: object of type 'NoneType' has no len()
