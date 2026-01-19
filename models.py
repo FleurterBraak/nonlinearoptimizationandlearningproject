@@ -3,11 +3,11 @@ import numpy as np
 from supplementary import Value
 
 
-def weight_init_function(layer_size1: int, layer_size2: int):
+def weight_init_function(layer_size1: int, layer_size2: int, x):
     return np.random.uniform(-1, 1, (layer_size1, layer_size2))
 
 
-def bias_init_function(layer_size: int):
+def bias_init_function(layer_size: int, x):
     return np.random.uniform(-1, 1, layer_size)
 
 
@@ -26,12 +26,12 @@ class NeuralNetwork:
         for i, size in enumerate(layers):
             if i > 0:
                 self.biases.append(
-                    Value(data=bias_init_function(layer_size=size), expr=f"$b^{{{i}}}$")
+                    Value(data=bias_init_function(layer_size=size, x=np.sqrt(6 / (layers[0] + layers[-1]))), expr=f"$b^{{{i}}}$")
                 )
             if i < self.number_of_layers:
                 # We initialize the weights transposed
                 self.weights.append(
-                    Value(weight_init_function(layer_size1=size, layer_size2=layers[i+1]), expr=f"$(W^T)^{{{i}}}$")
+                    Value(weight_init_function(layer_size1=size, layer_size2=layers[i+1], x=np.sqrt(6 / (layers[0] + layers[-1]))), expr=f"$(W^T)^{{{i}}}$")
                 )
 
     def __call__(self, x):
