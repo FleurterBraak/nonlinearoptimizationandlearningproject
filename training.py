@@ -62,7 +62,7 @@ def train_wandb(config=None):
         config = run.config
         activation_functions = [activation_function for _ in range(len(layers)-2)]
         activation_functions.extend([softmax])
-        run.name = f"sweep_logi_{str(layers)}_" + "_".join([f"{key}_{config[key]}" for key in config.keys()])
+        run.name = f"{activation_function.__name__}_{str(layers)}_" + "_".join([f"{key}_{config[key]}" for key in config.keys()])
 
         # Initialize a neural network with some layers and the default activation functions.
         neural_network = NeuralNetwork(
@@ -89,6 +89,10 @@ def train_wandb(config=None):
             train_loss = 0.0
             correctly_classified = 0
             with tqdm(train_loader, desc=f"Training epoch {epoch}") as training_epoch:
+                # initialize stuff for Adam, might need to give better names to variables
+                v_vectors = None
+                c_vectors = None
+                t = 1
                 for batch in training_epoch:
                     # Reset the gradients so that we start fresh.
                     neural_network.reset_gradients()
@@ -114,7 +118,11 @@ def train_wandb(config=None):
                     loss.backward()
 
                     # Update the weights and biases using the chosen algorithm, in this case gradient descent.
-                    neural_network.gradient_descent(learning_rate)
+                    if config.optimizer == "sgd":
+                        neural_network.gradient_descent(learning_rate)
+                    elif config.opitmizer == "adam":
+                        v_vectors, c_vectors = neural_network.adam(learning_rate, iteration=t, v_vectors=v_vectors, c_vectors=c_vectors)
+                    t += 1
 
                     # Store the loss for this batch.
                     train_loss += loss.data
@@ -236,16 +244,20 @@ def train(learning_rate):
     # Set training configuration
     epoch = 1
     MAX_EPOCHS = 100
+    LOSS_THRESHOLD = 150.0
 
     # Do the full training algorithm
     train_losses = []
     validation_losses = []
     train_accuracies = []
     validation_accuracies = []
-    while epoch < MAX_EPOCHS and (validation_losses[-1] < 150 if validation_losses != [] else validation_losses == []):
+    while epoch < MAX_EPOCHS and (validation_losses[-1] < LOSS_THRESHOLD if validation_losses != [] else True):
         # (Re)set the training loss for this epoch.
         train_loss = 0.0
         correctly_classified = 0
+        #v_vectors = None
+        #c_vectors = None
+        #t = 1
         for batch in tqdm(train_loader, desc=f"Training epoch {epoch}"):
             # Reset the gradients so that we start fresh.
             neural_network.reset_gradients()
@@ -272,6 +284,8 @@ def train(learning_rate):
 
             # Update the weights and biases using the chosen algorithm, in this case gradient descent.
             neural_network.gradient_descent(learning_rate)
+            #v_vectors, c_vectors = neural_network.adam(learning_rate, iteration=t, v_vectors=v_vectors, c_vectors=c_vectors)
+            #t += 1
 
             # Store the loss for this batch.
             train_loss += loss.data
@@ -477,9 +491,13 @@ if __name__ == "__main__":
         "parameters": {
             "learning_rate": {
                 "distribution": "log_uniform_values",
-                "min": 0.05,
+                "min": 0.25,
                 "max": 1,
             },
+            "optimizer": {
+                "value": "sgd"
+                #can be either sgd or adam
+            }
         }
     }
 
