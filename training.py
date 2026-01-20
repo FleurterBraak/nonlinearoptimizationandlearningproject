@@ -54,15 +54,35 @@ test_dataset = list(zip(test_images, test_labels))
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True, drop_last=False)
 test_dataset_size = len(test_dataset)
 
-layers = [784, 256, 128, 64, 10]
-activation_function = logi
-
 def train_wandb(config=None):
     with wandb.init(config=config, project="NO&L Project", entity="jelle-roessink-university-of-twente") as run:
         config = run.config
+        layers = list(map(int, config.layer_widths.split("-")))
+        match config.activation_function:
+            case "identity":
+                activation_function = identity
+            case "relu":
+                activation_function = relu
+            case "logi":
+                activation_function = logi
+            case "softmax":
+                activation_function = softmax
+            case "tanh":
+                activation_function = tanh
+            case "sin":
+                activation_function = sin
+            case "silu":
+                activation_function = silu
+            case "softsign":
+                activation_function = softsign
+            case "elu":
+                activation_function = elu
+            case "softplus":
+                activation_function = softplus
+
         activation_functions = [activation_function for _ in range(len(layers)-2)]
         activation_functions.extend([softmax])
-        run.name = f"{activation_function.__name__}_{str(layers)}_" + "_".join([f"{key}_{config[key]}" for key in config.keys()])
+        run.name = "sweep" + "_".join([f"{key}_{config[key]}" for key in config.keys()])
 
         # Initialize a neural network with some layers and the default activation functions.
         neural_network = NeuralNetwork(
@@ -226,7 +246,7 @@ def train_wandb(config=None):
 
         run.finish()
 
-def train(learning_rate):
+def train(learning_rate, activation_function, layers):
     activation_functions = [activation_function for _ in range(len(layers)-2)]
     activation_functions.extend([softmax])
 
@@ -481,8 +501,12 @@ def train(learning_rate):
     # neural_network.save("some_folder")
 
 if __name__ == "__main__":
+    test_functions = ["identity", "relu", "logi", "softmax", "tanh", "sin", "silu", "softsign", "elu", "softplus"]
+    layer_configurations = [
+        "784-256-128-64-10",
+    ]
+
     sweep_config = {
-        "name": f"sweep_{activation_function}_{str(layers)}",
         "method": "bayes",
         "metric": {
             "name": "loss",
@@ -497,6 +521,13 @@ if __name__ == "__main__":
             "optimizer": {
                 "value": "sgd"
                 #can be either sgd or adam
+            },
+            "activation_function": {
+                "value": "logi"
+            },
+            "layer_widths": {
+                "value": "784-256-128-64-10"
+                #first layer should always be 784, last layer should always be 10
             }
         }
     }
