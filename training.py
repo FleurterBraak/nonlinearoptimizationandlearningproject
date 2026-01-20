@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm  # gives progression bars when running code
 import wandb
+import json
+import datetime
 
 from activation_functions import *
 from data_loader import DataLoader
@@ -97,13 +99,17 @@ def train_wandb(config=None):
 
         # Set training configuration
         learning_rate = config.learning_rate
-        epochs = 20
+        epochs = 10
 
         # Do the full training algorithm
         train_losses = []
         validation_losses = []
         train_accuracies = []
         validation_accuracies = []
+
+        #initialize minimal loss
+        min_loss = float("inf")
+
         for epoch in range(1, epochs+1):
             # (Re)set the training loss for this epoch.
             train_loss = 0.0
@@ -157,7 +163,7 @@ def train_wandb(config=None):
                         axis=1
                     )
                     correctly_classified += np.sum(true_classification == predicted_classification)
-                print("ETA for this run:", (epochs-epoch) * training_epoch.format_dict['elapsed'], "sec")
+                print("ETA for this run:", datetime.timedelta(seconds=(epochs-epoch) * training_epoch.format_dict['elapsed']))
 
             # Store the loss and average accuracy for the entire epoch.
             train_losses.append(train_loss)
@@ -200,6 +206,9 @@ def train_wandb(config=None):
             validation_losses.append(validation_loss)
             validation_accuracies.append(correctly_classified / validation_dataset_size)
 
+            if validation_loss < min_loss:
+                min_loss = validation_loss
+
             run.log({"loss": validation_loss, "acc": validation_accuracies, "learning_rate": learning_rate})
 
         # Compute the test loss and accuracies on the same axes
@@ -239,6 +248,12 @@ def train_wandb(config=None):
 
         print(f"test loss:      {test_loss}")
         print(f"test accuraccy: {correctly_classified / test_dataset_size}")
+
+        with open(f"saved_configs/{run.name}.json", "w") as file:
+            json.dump({
+                "min_loss": min_loss,
+                "learning_rate": learning_rate
+            }, file)
 
 
         # Save the parameters of the final network to disk
@@ -503,35 +518,47 @@ def train(learning_rate, activation_function, layers):
 if __name__ == "__main__":
     test_functions = ["identity", "relu", "logi", "softmax", "tanh", "sin", "silu", "softsign", "elu", "softplus"]
     layer_configurations = [
+        # deep narrow
         "784-256-128-64-10",
+        # deep wide
+        "784-256-8192-128-64-10",
+        # shallow narrow
+        "784-10",
+        # shallow wide
+        "784-8192-10",
     ]
 
-    sweep_config = {
-        "method": "bayes",
-        "metric": {
-            "name": "loss",
-            "goal": "minimize"
-        },
-        "parameters": {
-            "learning_rate": {
-                "distribution": "log_uniform_values",
-                "min": 0.25,
-                "max": 1,
-            },
-            "optimizer": {
-                "value": "sgd"
-                #can be either sgd or adam
-            },
-            "activation_function": {
-                "value": "logi"
-            },
-            "layer_widths": {
-                "value": "784-256-128-64-10"
-                #first layer should always be 784, last layer should always be 10
+    for layer_config in layer_configurations:
+        for fn in test_functions:
+            sweep_config = {
+                "method": "bayes",
+                "metric": {
+                    "name": "loss",
+                    "goal": "minimize"
+                },
+                "parameters": {
+                    "learning_rate": {
+                        "distribution": "log_uniform_values",
+                        "min": 0.25,
+                        "max": 1,
+                    },
+                    "optimizer": {
+                        "value": "sgd"
+                        #can be either sgd or adam
+                    },
+                    "activation_function": {
+                        "value": fn
+                    },
+                    "layer_widths": {
+                        "value": layer_config
+                        #first layer should always be 784, last layer should always be 10
+                    }
+                }
             }
-        }
-    }
 
-    sweep_id = wandb.sweep(sweep_config, project="NO&L Project", entity="jelle-roessink-university-of-twente")
+            #do hyperparameter optimization for all of these to find best learning rate
+            sweep_id = wandb.sweep(sweep_config, project="NO&L Project", entity="jelle-roessink-university-of-twente")
+            wandb.agent(sweep_id, train_wandb, count=1)
 
-    wandb.agent(sweep_id, train_wandb, count=10)
+            for path in Path("saved_configs").glob('*.json'):
+                print(path)
