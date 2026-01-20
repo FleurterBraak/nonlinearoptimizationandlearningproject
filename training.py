@@ -6,6 +6,7 @@ from tqdm import tqdm  # gives progression bars when running code
 import wandb
 import json
 import datetime
+import typing
 
 from activation_functions import *
 from data_loader import DataLoader
@@ -261,7 +262,33 @@ def train_wandb(config=None):
 
         run.finish()
 
-def train(learning_rate, activation_function, layers):
+def train(learning_rate: float, activation_function: typing.Callable | str, layers: list | str):
+    if isinstance(layers, str):
+        layers = list(map(int, layers.split("-")))
+    if isinstance(activation_function, str):
+        match activation_function:
+            case "identity":
+                activation_function = identity
+            case "relu":
+                activation_function = relu
+            case "logi":
+                activation_function = logi
+            case "softmax":
+                activation_function = softmax
+            case "tanh":
+                activation_function = tanh
+            case "sin":
+                activation_function = sin
+            case "silu":
+                activation_function = silu
+            case "softsign":
+                activation_function = softsign
+            case "elu":
+                activation_function = elu
+            case "softplus":
+                activation_function = softplus
+
+
     activation_functions = [activation_function for _ in range(len(layers)-2)]
     activation_functions.extend([softmax])
 
@@ -558,7 +585,14 @@ if __name__ == "__main__":
 
             #do hyperparameter optimization for all of these to find best learning rate
             sweep_id = wandb.sweep(sweep_config, project="NO&L Project", entity="jelle-roessink-university-of-twente")
-            wandb.agent(sweep_id, train_wandb, count=1)
+            wandb.agent(sweep_id, train_wandb, count=2)
 
+            all_configs = []
             for path in Path("saved_configs").glob('*.json'):
-                print(path)
+                if f"activation_function_{fn}_layer_widths_{layer_config}" in str(path):
+                    with open(path, "r") as file:
+                        file_data = json.load(file)
+                        all_configs.append(file_data)
+            best_config = min(all_configs, key=lambda x: x["min_loss"])
+
+            train(learning_rate=best_config["learning_rate"], activation_function=fn, layers=layer_config)
