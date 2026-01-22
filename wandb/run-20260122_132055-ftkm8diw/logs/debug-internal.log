@@ -1,0 +1,12 @@
+{"time":"2026-01-22T13:20:58.310939+01:00","level":"INFO","msg":"stream: starting","core version":"0.24.0"}
+{"time":"2026-01-22T13:20:58.7842135+01:00","level":"INFO","msg":"stream: created new stream","id":"ftkm8diw"}
+{"time":"2026-01-22T13:20:58.7842135+01:00","level":"INFO","msg":"handler: started","stream_id":"ftkm8diw"}
+{"time":"2026-01-22T13:20:58.7875532+01:00","level":"INFO","msg":"stream: started","id":"ftkm8diw"}
+{"time":"2026-01-22T13:20:58.7924249+01:00","level":"INFO","msg":"writer: started","stream_id":"ftkm8diw"}
+{"time":"2026-01-22T13:20:58.7929973+01:00","level":"INFO","msg":"sender: started","stream_id":"ftkm8diw"}
+{"time":"2026-01-22T13:48:23.1134204+01:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2026-01-22T13:48:23.3324148+01:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2026-01-22T13:48:23.4238277+01:00","level":"INFO","msg":"stream: closing","id":"ftkm8diw"}
+{"time":"2026-01-22T13:48:23.4238277+01:00","level":"INFO","msg":"handler: closed","stream_id":"ftkm8diw"}
+{"time":"2026-01-22T13:48:23.4258969+01:00","level":"INFO","msg":"sender: closed","stream_id":"ftkm8diw"}
+{"time":"2026-01-22T13:48:23.4258969+01:00","level":"INFO","msg":"stream: closed","id":"ftkm8diw"}
