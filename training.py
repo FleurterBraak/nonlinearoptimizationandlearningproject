@@ -7,7 +7,7 @@ import wandb #used for hyperparameter optimization
 import json #used to save and load hyperparameters
 import datetime #used for an ETA for when the process is finished
 import typing #used for nice colours
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor # for multithreading, speeds up process a lot, especially in jupyter.
 
 from activation_functions import *
 from data_loader import DataLoader
@@ -103,7 +103,7 @@ def train_wandb(config=None):
 
         # Set training configuration
         learning_rate = config.learning_rate
-        epochs = 20
+        epochs = 30
 
         # Do the full training algorithm
         train_losses = []
@@ -118,11 +118,12 @@ def train_wandb(config=None):
             # (Re)set the training loss for this epoch.
             train_loss = 0.0
             correctly_classified = 0
-            with tqdm(train_loader, desc=f"Training epoch {epoch}") as training_epoch:
+            with tqdm(train_loader, desc=f"Training epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}") as training_epoch:
                 # initialize stuff for Adam, might need to give better names to variables
                 for batch in training_epoch:
                     # Reset the gradients so that we start fresh.
                     neural_network.reset_gradients()
+                    neural_network.reset_adam()
 
                     # Get the images and labels from the batch
                     images = np.vstack([image for (image, _) in batch])
@@ -148,7 +149,7 @@ def train_wandb(config=None):
                     if config.optimizer == "sgd":
                         neural_network.gradient_descent(learning_rate)
                     elif config.optimizer == "adam":
-                        pass
+                        neural_network.adam(learning_rate)
 
                     # Store the loss for this batch.
                     train_loss += loss.data
@@ -171,7 +172,7 @@ def train_wandb(config=None):
 
             validation_loss = 0.0
             correctly_classified = 0
-            for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}"):
+            for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
                 # Get the images and labels from the batch
                 images = np.vstack([image for (image, _) in batch])
                 labels = np.vstack([label for (_, label) in batch])
@@ -214,7 +215,7 @@ def train_wandb(config=None):
         # Compute the test loss and accuracies on the same axes
         test_loss = 0.0
         correctly_classified = 0
-        for batch in tqdm(test_loader, desc=f"Testing epoch {epoch}"):
+        for batch in tqdm(test_loader, desc=f"Testing epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
             # Get the images and labels from the batch
             images = np.vstack([image for (image, _) in batch])
             labels = np.vstack([label for (_, label) in batch])
@@ -262,6 +263,7 @@ def train_wandb(config=None):
         run.finish()
 
 def train(learning_rate: float, activation_function: typing.Callable | str, layers: list | str):
+    optimizer = "adam"
     if isinstance(layers, str):
         layers = list(map(int, layers.split("-")))
     if isinstance(activation_function, str):
@@ -306,8 +308,8 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
     # Set training configuration
     epoch = 1
-    MAX_EPOCHS = 80
-    LOSS_THRESHOLD = 140.0
+    MAX_EPOCHS = 300
+    LOSS_THRESHOLD = 150.0
 
     # Do the full training algorithm
     train_losses = []
@@ -318,12 +320,10 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
         # (Re)set the training loss for this epoch.
         train_loss = 0.0
         correctly_classified = 0
-        #v_vectors = None
-        #c_vectors = None
-        #t = 1
-        for batch in tqdm(train_loader, desc=f"Training epoch {epoch}"):
+        for batch in tqdm(train_loader, desc=f"Training epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
             # Reset the gradients so that we start fresh.
             neural_network.reset_gradients()
+            neural_network.reset_adam()
 
             # Get the images and labels from the batch
             images = np.vstack([image for (image, _) in batch])
@@ -346,9 +346,10 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
             loss.backward()
 
             # Update the weights and biases using the chosen algorithm, in this case gradient descent.
-            neural_network.gradient_descent(learning_rate)
-            #v_vectors, c_vectors = neural_network.adam(learning_rate, iteration=t, v_vectors=v_vectors, c_vectors=c_vectors)
-            #t += 1
+            if optimizer == "sgd":
+                neural_network.gradient_descent(learning_rate)
+            elif optimizer == "adam":
+                neural_network.adam(learning_rate)
 
             # Store the loss for this batch.
             train_loss += loss.data
@@ -374,7 +375,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
         validation_loss = 0.0
         correctly_classified = 0
-        for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}"):
+        for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
             # Get the images and labels from the batch
             images = np.vstack([image for (image, _) in batch])
             labels = np.vstack([label for (_, label) in batch])
@@ -416,73 +417,76 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
         epoch += 1
 
-    print(" === SUMMARY === ")
-    print(" --- training --- ")
-    print(f"Accuracies: {train_accuracies}")
-    print(f"Losses: {train_losses}")
-    print("")
-    print(" --- validation --- ")
-    print(f"Accuracies: {validation_accuracies}")
-    print(f"Losses: {validation_losses}")
-    print("")
+    #print(" === SUMMARY === ")
+    #print(" --- training --- ")
+    #print(f"Accuracies: {train_accuracies}")
+    #print(f"Losses: {train_losses}")
+    #print("")
+    #print(" --- validation --- ")
+    #print(f"Accuracies: {validation_accuracies}")
+    #print(f"Losses: {validation_losses}")
+    #print("")
 
     # Plot of train vs test losses on the same axes
     plt.figure()
-    plt.title(f"Loss: train vs validation for learning rate: {learning_rate}, activation function: {activation_function}, layers: {layers}")
+    plt.title(f"Loss: train vs validation for learning rate: {learning_rate}, activation function: {activation_function.__name__}, layers: {layers}")
     plt.semilogy(np.array(range(1, epoch)), train_losses, label="training losses")
     plt.semilogy(np.array(range(1, epoch)), validation_losses, label="validation losses")
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
     plt.legend()
-    plt.savefig(f"figures/train_val_loss_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
 
     # Plot of train vs test loss on the x-axis but with different y-axis
-    #figure, ax1 = plt.subplots()
-    #color = "tab:blue"
-    #ax1.set_title("Loss: train vs validation")
-    #ax1.semilogy(np.array(range(1, epoch)), train_losses, color=color, label="train")
-    #ax1.set_ylabel("Train loss", color=color)
-    #ax1.tick_params(axis='y', labelcolor=color)
+    figure, ax1 = plt.subplots()
+    color = "tab:blue"
+    ax1.set_title("Loss: train vs validation")
+    ax1.semilogy(np.array(range(1, epoch)), train_losses, color=color, label="train")
+    ax1.set_ylabel("Train loss", color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
 
-    #ax2 = ax1.twinx()
-    #color = "tab:orange"
-    #ax2.semilogy(np.array(range(1, epoch)), validation_losses, color=color, label="validation")
-    #ax2.set_ylabel("validation loss", color=color)
-    #ax2.tick_params(axis='y', labelcolor=color)
+    ax2 = ax1.twinx()
+    color = "tab:orange"
+    ax2.semilogy(np.array(range(1, epoch)), validation_losses, color=color, label="validation")
+    ax2.set_ylabel("validation loss", color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
 
-    #figure.tight_layout()
+    figure.tight_layout()
+    plt.savefig(f"figures/train_val_loss_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
+
 
     # Plot of train vs test accuracies on the same axes
     plt.figure()
-    plt.title(f"Accuracy: train vs validation for learning rate: {learning_rate}, activation function: {activation_function}, layers: {layers}")
+    plt.title(f"Accuracy: train vs validation for learning rate: {learning_rate}, activation function: {activation_function.__name__}, layers: {layers}")
     plt.plot(np.array(range(1, epoch)), train_accuracies, label="train")
     plt.plot(np.array(range(1, epoch)), validation_accuracies, label="validation")
     plt.xlabel("Epochs")
     plt.ylabel("Accuracy")
     plt.legend()
+    
+    # Plot of train vs test accuracies on the x-axis but with different y-axis
+    figure, ax1 = plt.subplots()
+    color = "tab:blue"
+    ax1.set_title("Accuracy: train vs validation")
+    ax1.semilogy(np.array(range(1, epoch)), train_accuracies, color=color, label="train")
+    ax1.set_ylabel("Train accuracy", color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    ax2 = ax1.twinx()
+    color = "tab:orange"
+    ax2.semilogy(np.array(range(1, epoch)), validation_accuracies, color=color, label="validation")
+    ax2.set_ylabel("Test accuracy", color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    figure.tight_layout()
+
     plt.savefig(f"figures/train_test_acc_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
 
-    # Plot of train vs test accuracies on the x-axis but with different y-axis
-    #figure, ax1 = plt.subplots()
-    #color = "tab:blue"
-    #ax1.set_title("Accuracy: train vs validation")
-    #ax1.semilogy(np.array(range(1, epoch)), train_accuracies, color=color, label="train")
-    #ax1.set_ylabel("Train accuracy", color=color)
-    #ax1.tick_params(axis='y', labelcolor=color)
-
-    #ax2 = ax1.twinx()
-    #color = "tab:orange"
-    #ax2.semilogy(np.array(range(1, epoch)), validation_accuracies, color=color, label="validation")
-    #ax2.set_ylabel("Test accuracy", color=color)
-    #ax2.tick_params(axis='y', labelcolor=color)
-
-    #figure.tight_layout()
 
 
     # Compute the test loss and accuracies on the same axes
     test_loss = 0.0
     correctly_classified = 0
-    for batch in tqdm(test_loader, desc=f"Testing epoch {epoch}"):
+    for batch in tqdm(test_loader, desc=f"Testing epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
         # Get the images and labels from the batch
         images = np.vstack([image for (image, _) in batch])
         labels = np.vstack([label for (_, label) in batch])
@@ -514,36 +518,36 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
         )
         correctly_classified += np.sum(true_classification == predicted_classification)
 
-    print(f"test loss:      {test_loss}")
-    print(f"test accuraccy: {correctly_classified / test_dataset_size}")
+    #print(f"test loss:      {test_loss}")
+    #print(f"test accuraccy: {correctly_classified / test_dataset_size}")
 
     # We take a random starting point for 10 subsequent images we want to take a greater look at.
-    r = np.random.randint(0, 9_990)
+    #r = np.random.randint(0, 9_990)
 
     # We go over 10 images starting with r, plot them and show the prediction the network makes next to them.
-    plt.figure()
-    for i in range(9):
-        plt.rcParams["figure.figsize"] = (15, 10)
-        plt.subplot(3, 3, 1 + i)
-        image = Value(np.array(test_images[r + i]), "x")
-        plt.imshow(image.data.reshape(28, 28), cmap=plt.get_cmap('gray'))
-        plt.text(-5, 45,
-                f'True value:\n{test_labels[r + i]}: {test_y[r + i]}\n'
-                f'Output:\n'
-                f'[{neural_network(image)[0]:.2f} '  # needs __getitem__ method in Value class!
-                f'{neural_network(image)[1]:.2f} '
-                f'{neural_network(image)[2]:.2f} '
-                f'{neural_network(image)[3]:.2f} '
-                f'{neural_network(image)[4]:.2f}\n'
-                f'{neural_network(image)[5]:.2f} '
-                f'{neural_network(image)[6]:.2f} '
-                f'{neural_network(image)[7]:.2f} '
-                f'{neural_network(image)[8]:.2f} '
-                f'{neural_network(image)[9]:.2f}]: {np.argmax(neural_network(image).data)}')
-        plt.savefig(f"figures/picture_classification_lr_{learning_rate}_fn_{activation_function.__name__}_layer_{layers}.png")
+    #plt.figure()
+    #for i in range(9):
+    #   plt.rcParams["figure.figsize"] = (15, 10)
+    #   plt.subplot(3, 3, 1 + i)
+    #   image = Value(np.array(test_images[r + i]), "x")
+    #   plt.imshow(image.data.reshape(28, 28), cmap=plt.get_cmap('gray'))
+    #   plt.text(-5, 45,
+    #        f'True value:\n{test_labels[r + i]}: {test_y[r + i]}\n'
+    #        f'Output:\n'
+    #        f'[{neural_network(image)[0]:.2f} '  # needs __getitem__ method in Value class!
+    #        f'{neural_network(image)[1]:.2f} '
+    #        f'{neural_network(image)[2]:.2f} '
+    #        f'{neural_network(image)[3]:.2f} '
+    #        f'{neural_network(image)[4]:.2f}\n'
+    #        f'{neural_network(image)[5]:.2f} '
+    #        f'{neural_network(image)[6]:.2f} '
+    #        f'{neural_network(image)[7]:.2f} '
+    #        f'{neural_network(image)[8]:.2f} '
+    #        f'{neural_network(image)[9]:.2f}]: {np.argmax(neural_network(image).data)}')
+    #plt.savefig(f"figures/picture_classification_lr_{learning_rate}_fn_{activation_function.__name__}_layer_{layers}.png")
 
     plt.subplots_adjust(hspace=.8)
-    plt.show()
+    #plt.show()
 
     import gc
     gc.collect()
