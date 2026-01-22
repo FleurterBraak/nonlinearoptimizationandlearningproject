@@ -569,7 +569,7 @@ def train_hyperpar_opt(fnc: str, cfg: str, count: int):
                 "max": 1,
             },
             "optimizer": {
-                "value": "sgd"
+                "value": "adam"
                 #can be either sgd or adam
             },
             "activation_function": {
