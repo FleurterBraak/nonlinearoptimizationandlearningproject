@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.special as sp
+import math
 
 from supplementary import Value
 
@@ -151,5 +152,18 @@ def softplus(x: Value) -> Value:  # SoftPlus
         x.grad += 1 / (1 + np.exp(-x.data)) * result.grad
         # d/dx softplus(x) = logi(x)
 
+    result._backward_gradient_step = _backward_gradient_step
+    return result
+
+def erf(x: Value) -> Value:
+    if x.data.ndim == 2:
+        data = np.array([np.array([math.erf(t) for t in x.data[i]]) for i in range(len(x.data))])
+    else:
+        data = np.array([math.erf(t) for t in x.data])
+    result = Value(data, f"erf({x.expr})", (x,))
+
+    def _backward_gradient_step():
+        x.grad += 2/np.sqrt(np.pi) * np.exp(-x.data**2) * result.grad
+    
     result._backward_gradient_step = _backward_gradient_step
     return result

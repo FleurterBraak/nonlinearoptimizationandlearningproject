@@ -3,10 +3,11 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm  # gives progression bars when running code
-import wandb
-import json
-import datetime
-import typing
+import wandb #used for hyperparameter optimization
+import json #used to save and load hyperparameters
+import datetime #used for an ETA for when the process is finished
+import typing #used for nice colours
+from concurrent.futures import ProcessPoolExecutor
 
 from activation_functions import *
 from data_loader import DataLoader
@@ -82,10 +83,12 @@ def train_wandb(config=None):
                 activation_function = elu
             case "softplus":
                 activation_function = softplus
+            case "erf":
+                activation_function = erf
 
         activation_functions = [activation_function for _ in range(len(layers)-2)]
         activation_functions.extend([softmax])
-        run.name = "sweep" + "_".join([f"{key}_{config[key]}" for key in config.keys()])
+        run.name = "sweep_" + "_".join([f"{key}_{config[key]}" for key in config.keys()])
 
         # Initialize a neural network with some layers and the default activation functions.
         neural_network = NeuralNetwork(
@@ -100,7 +103,7 @@ def train_wandb(config=None):
 
         # Set training configuration
         learning_rate = config.learning_rate
-        epochs = 10
+        epochs = 20
 
         # Do the full training algorithm
         train_losses = []
@@ -117,9 +120,6 @@ def train_wandb(config=None):
             correctly_classified = 0
             with tqdm(train_loader, desc=f"Training epoch {epoch}") as training_epoch:
                 # initialize stuff for Adam, might need to give better names to variables
-                v_vectors = None
-                c_vectors = None
-                t = 1
                 for batch in training_epoch:
                     # Reset the gradients so that we start fresh.
                     neural_network.reset_gradients()
@@ -147,9 +147,8 @@ def train_wandb(config=None):
                     # Update the weights and biases using the chosen algorithm, in this case gradient descent.
                     if config.optimizer == "sgd":
                         neural_network.gradient_descent(learning_rate)
-                    elif config.opitmizer == "adam":
-                        v_vectors, c_vectors = neural_network.adam(learning_rate, iteration=t, v_vectors=v_vectors, c_vectors=c_vectors)
-                    t += 1
+                    elif config.optimizer == "adam":
+                        pass
 
                     # Store the loss for this batch.
                     train_loss += loss.data
@@ -287,6 +286,8 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
                 activation_function = elu
             case "softplus":
                 activation_function = softplus
+            case "erf":
+                activation_function = erf
 
 
     activation_functions = [activation_function for _ in range(len(layers)-2)]
@@ -305,15 +306,15 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
     # Set training configuration
     epoch = 1
-    MAX_EPOCHS = 100
-    LOSS_THRESHOLD = 150.0
+    MAX_EPOCHS = 80
+    LOSS_THRESHOLD = 140.0
 
     # Do the full training algorithm
     train_losses = []
     validation_losses = []
     train_accuracies = []
     validation_accuracies = []
-    while epoch < MAX_EPOCHS and (validation_losses[-1] < LOSS_THRESHOLD if validation_losses != [] else True):
+    while epoch < MAX_EPOCHS and (validation_losses[-1] > LOSS_THRESHOLD if validation_losses != [] else True):
         # (Re)set the training loss for this epoch.
         train_loss = 0.0
         correctly_classified = 0
@@ -413,6 +414,8 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
         print(f"Loss: {validation_loss}")
         print("")
 
+        epoch += 1
+
     print(" === SUMMARY === ")
     print(" --- training --- ")
     print(f"Accuracies: {train_accuracies}")
@@ -425,53 +428,55 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
     # Plot of train vs test losses on the same axes
     plt.figure()
-    plt.title("Loss: train vs validation")
-    plt.semilogy(np.array(range(1, epoch)), train_losses, label="train")
-    plt.semilogy(np.array(range(1, epoch)), validation_losses, label="validation")
+    plt.title(f"Loss: train vs validation for learning rate: {learning_rate}, activation function: {activation_function}, layers: {layers}")
+    plt.semilogy(np.array(range(1, epoch)), train_losses, label="training losses")
+    plt.semilogy(np.array(range(1, epoch)), validation_losses, label="validation losses")
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
     plt.legend()
+    plt.savefig(f"figures/train_val_loss_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
 
     # Plot of train vs test loss on the x-axis but with different y-axis
-    figure, ax1 = plt.subplots()
-    color = "tab:blue"
-    ax1.set_title("Loss: train vs validation")
-    ax1.semilogy(np.array(range(1, epoch)), train_losses, color=color, label="train")
-    ax1.set_ylabel("Train loss", color=color)
-    ax1.tick_params(axis='y', labelcolor=color)
+    #figure, ax1 = plt.subplots()
+    #color = "tab:blue"
+    #ax1.set_title("Loss: train vs validation")
+    #ax1.semilogy(np.array(range(1, epoch)), train_losses, color=color, label="train")
+    #ax1.set_ylabel("Train loss", color=color)
+    #ax1.tick_params(axis='y', labelcolor=color)
 
-    ax2 = ax1.twinx()
-    color = "tab:orange"
-    ax2.semilogy(np.array(range(1, epoch)), validation_losses, color=color, label="validation")
-    ax2.set_ylabel("validation loss", color=color)
-    ax2.tick_params(axis='y', labelcolor=color)
+    #ax2 = ax1.twinx()
+    #color = "tab:orange"
+    #ax2.semilogy(np.array(range(1, epoch)), validation_losses, color=color, label="validation")
+    #ax2.set_ylabel("validation loss", color=color)
+    #ax2.tick_params(axis='y', labelcolor=color)
 
-    figure.tight_layout()
+    #figure.tight_layout()
 
     # Plot of train vs test accuracies on the same axes
     plt.figure()
-    plt.title("Accuracy: train vs validation")
+    plt.title(f"Accuracy: train vs validation for learning rate: {learning_rate}, activation function: {activation_function}, layers: {layers}")
     plt.plot(np.array(range(1, epoch)), train_accuracies, label="train")
     plt.plot(np.array(range(1, epoch)), validation_accuracies, label="validation")
     plt.xlabel("Epochs")
     plt.ylabel("Accuracy")
     plt.legend()
+    plt.savefig(f"figures/train_test_acc_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
 
     # Plot of train vs test accuracies on the x-axis but with different y-axis
-    figure, ax1 = plt.subplots()
-    color = "tab:blue"
-    ax1.set_title("Accuracy: train vs validation")
-    ax1.semilogy(np.array(range(1, epoch)), train_accuracies, color=color, label="train")
-    ax1.set_ylabel("Train accuracy", color=color)
-    ax1.tick_params(axis='y', labelcolor=color)
+    #figure, ax1 = plt.subplots()
+    #color = "tab:blue"
+    #ax1.set_title("Accuracy: train vs validation")
+    #ax1.semilogy(np.array(range(1, epoch)), train_accuracies, color=color, label="train")
+    #ax1.set_ylabel("Train accuracy", color=color)
+    #ax1.tick_params(axis='y', labelcolor=color)
 
-    ax2 = ax1.twinx()
-    color = "tab:orange"
-    ax2.semilogy(np.array(range(1, epoch)), validation_accuracies, color=color, label="validation")
-    ax2.set_ylabel("Test accuracy", color=color)
-    ax2.tick_params(axis='y', labelcolor=color)
+    #ax2 = ax1.twinx()
+    #color = "tab:orange"
+    #ax2.semilogy(np.array(range(1, epoch)), validation_accuracies, color=color, label="validation")
+    #ax2.set_ylabel("Test accuracy", color=color)
+    #ax2.tick_params(axis='y', labelcolor=color)
 
-    figure.tight_layout()
+    #figure.tight_layout()
 
 
     # Compute the test loss and accuracies on the same axes
@@ -535,15 +540,61 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
                 f'{neural_network(image)[7]:.2f} '
                 f'{neural_network(image)[8]:.2f} '
                 f'{neural_network(image)[9]:.2f}]: {np.argmax(neural_network(image).data)}')
+        plt.savefig(f"figures/picture_classification_lr_{learning_rate}_fn_{activation_function.__name__}_layer_{layers}.png")
 
     plt.subplots_adjust(hspace=.8)
     plt.show()
 
+    import gc
+    gc.collect()
+
     # Save the parameters of the final network to disk
     # neural_network.save("some_folder")
 
+def train_hyperpar_opt(fnc: str, cfg: str, count: int):
+    sweep_config = {
+        "method": "bayes",
+        "metric": {
+            "name": "loss",
+            "goal": "minimize"
+        },
+        "parameters": {
+            "learning_rate": {
+                "distribution": "log_uniform_values",
+                "min": 0.25,
+                "max": 1,
+            },
+            "optimizer": {
+                "value": "sgd"
+                #can be either sgd or adam
+            },
+            "activation_function": {
+                "value": fnc
+            },
+            "layer_widths": {
+                "value": cfg
+                #first layer should always be 784, last layer should always be 10
+            }
+        }
+    }
+
+    #do hyperparameter optimization for all of these to find best learning rate
+    sweep_id = wandb.sweep(sweep_config, project="NO&L Project", entity="jelle-roessink-university-of-twente")
+    wandb.agent(sweep_id, train_wandb, count=count)
+
+    all_configs = []
+    for path in Path("saved_configs").glob('*.json'):
+        if f"activation_function_{fnc}_layer_widths_{cfg}" in str(path):
+            with open(path, "r") as file:
+                file_data = json.load(file)
+                all_configs.append(file_data)
+    best_config = min(all_configs, key=lambda x: x["min_loss"])
+
+    train(learning_rate=best_config["learning_rate"], activation_function=fnc, layers=cfg)
+
 if __name__ == "__main__":
-    test_functions = ["identity", "relu", "logi", "softmax", "tanh", "sin", "silu", "softsign", "elu", "softplus"]
+    HYPEROPT_COUNT = 10
+    test_functions = ["identity", "relu", "logi", "softmax", "tanh", "sin", "silu", "softsign", "elu", "softplus", "erf"]
     layer_configurations = [
         # deep narrow
         "784-256-128-64-10",
@@ -553,46 +604,9 @@ if __name__ == "__main__":
         "784-10",
         # shallow wide
         "784-8192-10",
-    ]
+    ] # first layer should always be 784, last layer should always be 10.
 
-    for layer_config in layer_configurations:
-        for fn in test_functions:
-            sweep_config = {
-                "method": "bayes",
-                "metric": {
-                    "name": "loss",
-                    "goal": "minimize"
-                },
-                "parameters": {
-                    "learning_rate": {
-                        "distribution": "log_uniform_values",
-                        "min": 0.25,
-                        "max": 1,
-                    },
-                    "optimizer": {
-                        "value": "sgd"
-                        #can be either sgd or adam
-                    },
-                    "activation_function": {
-                        "value": fn
-                    },
-                    "layer_widths": {
-                        "value": layer_config
-                        #first layer should always be 784, last layer should always be 10
-                    }
-                }
-            }
-
-            #do hyperparameter optimization for all of these to find best learning rate
-            sweep_id = wandb.sweep(sweep_config, project="NO&L Project", entity="jelle-roessink-university-of-twente")
-            wandb.agent(sweep_id, train_wandb, count=2)
-
-            all_configs = []
-            for path in Path("saved_configs").glob('*.json'):
-                if f"activation_function_{fn}_layer_widths_{layer_config}" in str(path):
-                    with open(path, "r") as file:
-                        file_data = json.load(file)
-                        all_configs.append(file_data)
-            best_config = min(all_configs, key=lambda x: x["min_loss"])
-
-            train(learning_rate=best_config["learning_rate"], activation_function=fn, layers=layer_config)
+    with ProcessPoolExecutor() as executor:
+        for layer_config in layer_configurations:
+            for fn in test_functions:
+                executor.submit(train_hyperpar_opt, fn, layer_config, HYPEROPT_COUNT)
