@@ -5,9 +5,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm  # gives progression bars when running code
 import wandb #used for hyperparameter optimization
 import json #used to save and load hyperparameters
-import datetime #used for an ETA for when the process is finished
 import typing #used for nice colours
-from concurrent.futures import ProcessPoolExecutor # for multithreading, speeds up process a lot, especially in jupyter.
+import concurrent.futures # for multithreading, speeds up process a lot, especially in jupyter.
 
 from activation_functions import *
 from data_loader import DataLoader
@@ -118,53 +117,50 @@ def train_wandb(config=None):
             # (Re)set the training loss for this epoch.
             train_loss = 0.0
             correctly_classified = 0
-            with tqdm(train_loader, desc=f"Training epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}") as training_epoch:
-                # initialize stuff for Adam, might need to give better names to variables
-                for batch in training_epoch:
-                    # Reset the gradients so that we start fresh.
-                    neural_network.reset_gradients()
-                    neural_network.reset_adam()
+            for batch in train_loader:
+                # Reset the gradients so that we start fresh.
+                neural_network.reset_gradients()
+                neural_network.reset_adam()
 
-                    # Get the images and labels from the batch
-                    images = np.vstack([image for (image, _) in batch])
-                    labels = np.vstack([label for (_, label) in batch])
+                # Get the images and labels from the batch
+                images = np.vstack([image for (image, _) in batch])
+                labels = np.vstack([label for (_, label) in batch])
 
-                    # Wrap images and labels in a Value class.
-                    images = Value(images, expr="X")
-                    labels = Value(labels, expr="Y")
+                # Wrap images and labels in a Value class.
+                images = Value(images, expr="X")
+                labels = Value(labels, expr="Y")
 
-                    # Compute what the model says is the label.
-                    output = neural_network(images)
+                # Compute what the model says is the label.
+                output = neural_network(images)
 
-                    # Compute the loss for this batch.
-                    loss = mse_loss(
-                        output,
-                        labels
-                    )
+                # Compute the loss for this batch.
+                loss = mse_loss(
+                    output,
+                    labels
+                )
 
-                    # Do backpropagation
-                    loss.backward()
+                # Do backpropagation
+                loss.backward()
 
-                    # Update the weights and biases using the chosen algorithm, in this case gradient descent.
-                    if config.optimizer == "sgd":
-                        neural_network.gradient_descent(learning_rate)
-                    elif config.optimizer == "adam":
-                        neural_network.adam(learning_rate)
+                # Update the weights and biases using the chosen algorithm, in this case gradient descent.
+                if config.optimizer == "sgd":
+                    neural_network.gradient_descent(learning_rate)
+                elif config.optimizer == "adam":
+                    neural_network.adam(learning_rate)
 
-                    # Store the loss for this batch.
-                    train_loss += loss.data
+                # Store the loss for this batch.
+                train_loss += loss.data
 
-                    # Store accuracies for extra interpretability
-                    true_classification = np.argmax(
-                        labels.data,
-                        axis=1
-                    )
-                    predicted_classification = np.argmax(
-                        output.data,
-                        axis=1
-                    )
-                    correctly_classified += np.sum(true_classification == predicted_classification)
-                print("ETA for this run:", datetime.timedelta(seconds=(epochs-epoch) * training_epoch.format_dict['elapsed']))
+                # Store accuracies for extra interpretability
+                true_classification = np.argmax(
+                    labels.data,
+                    axis=1
+                )
+                predicted_classification = np.argmax(
+                    output.data,
+                    axis=1
+                )
+                correctly_classified += np.sum(true_classification == predicted_classification)
 
             # Store the loss and average accuracy for the entire epoch.
             train_losses.append(train_loss)
@@ -172,7 +168,7 @@ def train_wandb(config=None):
 
             validation_loss = 0.0
             correctly_classified = 0
-            for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
+            for batch in validation_loader:
                 # Get the images and labels from the batch
                 images = np.vstack([image for (image, _) in batch])
                 labels = np.vstack([label for (_, label) in batch])
@@ -215,7 +211,7 @@ def train_wandb(config=None):
         # Compute the test loss and accuracies on the same axes
         test_loss = 0.0
         correctly_classified = 0
-        for batch in tqdm(test_loader, desc=f"Testing epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
+        for batch in test_loader:
             # Get the images and labels from the batch
             images = np.vstack([image for (image, _) in batch])
             labels = np.vstack([label for (_, label) in batch])
@@ -263,7 +259,7 @@ def train_wandb(config=None):
         run.finish()
 
 def train(learning_rate: float, activation_function: typing.Callable | str, layers: list | str):
-    optimizer = "adam"
+    optimizer = "sgd"
     if isinstance(layers, str):
         layers = list(map(int, layers.split("-")))
     if isinstance(activation_function, str):
@@ -320,7 +316,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
         # (Re)set the training loss for this epoch.
         train_loss = 0.0
         correctly_classified = 0
-        for batch in tqdm(train_loader, desc=f"Training epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
+        for batch in train_loader:
             # Reset the gradients so that we start fresh.
             neural_network.reset_gradients()
             neural_network.reset_adam()
@@ -375,7 +371,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
         validation_loss = 0.0
         correctly_classified = 0
-        for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
+        for batch in validation_loader:
             # Get the images and labels from the batch
             images = np.vstack([image for (image, _) in batch])
             labels = np.vstack([label for (_, label) in batch])
@@ -486,7 +482,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
     # Compute the test loss and accuracies on the same axes
     test_loss = 0.0
     correctly_classified = 0
-    for batch in tqdm(test_loader, desc=f"Testing epoch {epoch}, learning rate: {learning_rate}, activation function {activation_function.__name__}, layers: {layers}"):
+    for batch in test_loader:
         # Get the images and labels from the batch
         images = np.vstack([image for (image, _) in batch])
         labels = np.vstack([label for (_, label) in batch])
@@ -569,7 +565,7 @@ def train_hyperpar_opt(fnc: str, cfg: str, count: int):
                 "max": 1,
             },
             "optimizer": {
-                "value": "adam"
+                "value": "sgd"
                 #can be either sgd or adam
             },
             "activation_function": {
@@ -598,7 +594,7 @@ def train_hyperpar_opt(fnc: str, cfg: str, count: int):
 
 if __name__ == "__main__":
     HYPEROPT_COUNT = 10
-    test_functions = ["identity", "relu", "logi", "softmax", "tanh", "sin", "silu", "softsign", "elu", "softplus", "erf"]
+    test_functions = ["identity", "relu", "logi", "softmax", "tanh", "sin", "silu", "softsign", "softplus", "erf"]
     layer_configurations = [
         # deep narrow
         "784-256-128-64-10",
@@ -610,7 +606,8 @@ if __name__ == "__main__":
         "784-8192-10",
     ] # first layer should always be 784, last layer should always be 10.
 
-    with ProcessPoolExecutor() as executor:
-        for layer_config in layer_configurations:
-            for fn in test_functions:
-                executor.submit(train_hyperpar_opt, fn, layer_config, HYPEROPT_COUNT)
+    with tqdm(total=len(layer_configurations)*len(test_functions)) as pbar:
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            futures = [executor.submit(train_hyperpar_opt, fn, layer_config, HYPEROPT_COUNT) for layer_config in layer_configurations for fn in test_functions]
+            for future in concurrent.futures.as_completed(futures):
+                pbar.update(1)

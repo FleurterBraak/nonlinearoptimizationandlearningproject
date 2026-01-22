@@ -26,7 +26,7 @@ def relu(x: Value) -> Value:
 
 
 def logi(x: Value) -> Value:
-    data = 1 / (1 + np.exp(-x.data))
+    data = sp.expit(x.data)
     result = Value(data, f"logi({x.expr})", (x,))
 
     def _backward_gradient_step():
@@ -59,7 +59,7 @@ def softmax(x: Value) -> Value:
 
 
 def tanh(x: Value) -> Value:
-    data = (np.exp(x.data) - np.exp(-x.data)) / (np.exp(x.data) + np.exp(-x.data))
+    data = np.tanh(x.data)
     # tanh(x) = sinh(x)/cosh(x)
     result = Value(data, f"tanh({x.expr})", (x,))
 
@@ -84,7 +84,7 @@ def sin(x: Value) -> Value:
 
 
 def silu(x: Value) -> Value:  # SiLU (sigmoid linear unit)
-    logi_data = 1 / (1 + np.exp(-x.data))
+    logi_data = sp.expit(x.data)
     data = x.data * logi_data
     # silu(x) = x / (1+exp(-x)) = x * logi(x)
     result = Value(data, f"swish({x.expr})", (x,))
@@ -112,29 +112,12 @@ def softsign(x: Value) -> Value:  # SoftSign
 
 def elu(x: Value, a=1) -> Value:  # ELU (exponential linear unit)
     data = x.data * np.heaviside(x.data, 1) + a * (np.exp(x.data) - 1) * np.heaviside(-x.data, 0)
-    # the above works for smaller values, but for large values of x.data it causes an overflow. 
-    #if np.ndim(x.data) == 1:
-    #    data = np.array([x.data[i] if x.data[i] >= 0 else a * (np.exp(x.data[i]) - 1) for i in range(len(x.data))])
-    #else:
-    #    m,n = np.shape(x.data)
-    #    data = np.zeros_like(x.data)
-    #    for i in range(m):
-    #        for j in range(n):
-    #            data[i][j] = x.data[i][j] if x.data[i][j] >= 0 else a * (np.exp(x.data[i][j]) - 1)
-
+    # the above works for smaller values, but for large values of x.data it causes an overflow.
+    
     # elu(x) = {x if x >= 0, a(exp(x)-1) if x < 0}
     result = Value(data, f"elu({x.expr})", (x,))
 
     def _backward_gradient_step():
-        #if np.ndim(x.data) == 1:
-        #    gr = np.array([1 if x.data[i] >= 0 else a * np.exp(x.data[i]) for i in range(len(x.data))])
-        #else:
-        #    m,n = np.shape(x.data)
-        #    gr = np.zeros_like(x.data)
-        #    for i in range(m):
-        #        for j in range(n):
-        #            data[i][j] = 1 if x.data[i][j] >= 0 else a * np.exp(x.data[i][j])
-        #x.grad += gr * result.grad
         x.grad += np.heaviside(x.data, 1) + np.heaviside(-x.data, 0) * a * np.exp(x.data)
         # d/dx elu = {1 if x >= 0, a * exp(x) if x<0}
 
@@ -144,12 +127,11 @@ def elu(x: Value, a=1) -> Value:  # ELU (exponential linear unit)
 
 def softplus(x: Value) -> Value:  # SoftPlus
     data = sp.softplus(x.data)
-    #data = np.log(1 + np.exp(x.data))
     # softplus(x) = ln(1 + exp(x))
     result = Value(data, f"sofplus({x.expr})", (x,))
 
     def _backward_gradient_step():
-        x.grad += 1 / (1 + np.exp(-x.data)) * result.grad
+        x.grad += sp.expit(x.data) * result.grad
         # d/dx softplus(x) = logi(x)
 
     result._backward_gradient_step = _backward_gradient_step
