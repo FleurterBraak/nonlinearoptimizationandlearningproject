@@ -57,6 +57,11 @@ test_dataset = list(zip(test_images, test_labels))
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True, drop_last=False)
 test_dataset_size = len(test_dataset)
 
+MAX_EPOCHS = 64 # amount of epochs after which to terminate the train() function if loss threshold is not reached
+HYPEROPT_EPOCHS = 16 # amount of epochs for hyperparameter optimization
+HYPEROPT_COUNT = 8 # amount of times to do hyperparameter optimization for a specific network
+LOSS_THRESHOLD = 150 # loss threshold for train() function
+
 def train_wandb(config=None):
     with wandb.init(config=config, project="NO&L Project", entity="jelle-roessink-university-of-twente") as run:
         config = run.config
@@ -84,6 +89,10 @@ def train_wandb(config=None):
                 activation_function = softplus
             case "erf":
                 activation_function = erf
+            case _:
+                activation_function = None
+
+        assert isinstance(activation_function, typing.Callable), f"{activation_function} is not recognized, maybe you forgot to update wandb_train()?"
 
         activation_functions = [activation_function for _ in range(len(layers)-2)]
         activation_functions.extend([softmax])
@@ -102,16 +111,13 @@ def train_wandb(config=None):
 
         # Set training configuration
         learning_rate = config.learning_rate
-        epochs = 30
+        epochs = HYPEROPT_EPOCHS
 
         # Do the full training algorithm
         train_losses = []
         validation_losses = []
         train_accuracies = []
         validation_accuracies = []
-
-        #initialize minimal loss
-        min_loss = float("inf")
 
         for epoch in range(1, epochs+1):
             # (Re)set the training loss for this epoch.
@@ -203,9 +209,6 @@ def train_wandb(config=None):
             validation_losses.append(validation_loss)
             validation_accuracies.append(correctly_classified / validation_dataset_size)
 
-            if validation_loss < min_loss:
-                min_loss = validation_loss
-
             run.log({"loss": validation_loss, "acc": validation_accuracies, "learning_rate": learning_rate})
 
         # Compute the test loss and accuracies on the same axes
@@ -243,12 +246,12 @@ def train_wandb(config=None):
             )
             correctly_classified += np.sum(true_classification == predicted_classification)
 
-        print(f"test loss:      {test_loss}")
-        print(f"test accuraccy: {correctly_classified / test_dataset_size}")
+        # print(f"test loss:      {test_loss}")
+        # print(f"test accuraccy: {correctly_classified / test_dataset_size}")
 
         with open(f"saved_configs/{run.name}.json", "w") as file:
             json.dump({
-                "min_loss": min_loss,
+                "min_loss": min(validation_losses),
                 "learning_rate": learning_rate
             }, file)
 
@@ -258,8 +261,8 @@ def train_wandb(config=None):
 
         run.finish()
 
-def train(learning_rate: float, activation_function: typing.Callable | str, layers: list | str):
-    optimizer = "sgd"
+def train(learning_rate: float, activation_function: typing.Callable | str, layers: list | str) -> tuple[list, list, float]:
+    optimizer = "adam"
     if isinstance(layers, str):
         layers = list(map(int, layers.split("-")))
     if isinstance(activation_function, str):
@@ -287,6 +290,8 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
             case "erf":
                 activation_function = erf
 
+    assert isinstance(activation_function, typing.Callable), f"{activation_function} is not recognized, maybe you forgot to update train()?"
+
 
     activation_functions = [activation_function for _ in range(len(layers)-2)]
     activation_functions.extend([softmax])
@@ -304,8 +309,6 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
     # Set training configuration
     epoch = 1
-    MAX_EPOCHS = 300
-    LOSS_THRESHOLD = 150.0
 
     # Do the full training algorithm
     train_losses = []
@@ -316,7 +319,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
         # (Re)set the training loss for this epoch.
         train_loss = 0.0
         correctly_classified = 0
-        for batch in train_loader:
+        for batch in tqdm(train_loader, desc=f"training epoch {epoch}"):
             # Reset the gradients so that we start fresh.
             neural_network.reset_gradients()
             neural_network.reset_adam()
@@ -365,13 +368,13 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
         train_losses.append(train_loss)
         train_accuracies.append(correctly_classified / train_dataset_size)
 
-        print(f"Accuracy: {train_accuracies[-1]}")
-        print(f"Loss: {train_loss}")
-        print("")
+        # print(f"Accuracy: {train_accuracies[-1]}")
+        # print(f"Loss: {train_loss}")
+        # print("")
 
         validation_loss = 0.0
         correctly_classified = 0
-        for batch in validation_loader:
+        for batch in tqdm(validation_loader, desc=f"validation epoch {epoch}"):
             # Get the images and labels from the batch
             images = np.vstack([image for (image, _) in batch])
             labels = np.vstack([label for (_, label) in batch])
@@ -407,9 +410,9 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
         validation_accuracies.append(correctly_classified / validation_dataset_size)
 
 
-        print(f"Accuracy: {validation_accuracies[-1]}")
-        print(f"Loss: {validation_loss}")
-        print("")
+        # print(f"Accuracy: {validation_accuracies[-1]}")
+        # print(f"Loss: {validation_loss}")
+        # print("")
 
         epoch += 1
 
@@ -447,7 +450,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
     ax2.tick_params(axis='y', labelcolor=color)
 
     figure.tight_layout()
-    plt.savefig(f"figures/train_val_loss_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
+    plt.savefig(f"figures/loss/train_val_loss_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
 
 
     # Plot of train vs test accuracies on the same axes
@@ -475,7 +478,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
     figure.tight_layout()
 
-    plt.savefig(f"figures/train_test_acc_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
+    plt.savefig(f"figures/acc/train_test_acc_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
 
 
 
@@ -542,16 +545,15 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
     #        f'{neural_network(image)[9]:.2f}]: {np.argmax(neural_network(image).data)}')
     #plt.savefig(f"figures/picture_classification_lr_{learning_rate}_fn_{activation_function.__name__}_layer_{layers}.png")
 
-    plt.subplots_adjust(hspace=.8)
+    #plt.subplots_adjust(hspace=.8)
     #plt.show()
 
-    import gc
-    gc.collect()
+    return train_losses, validation_losses, test_loss
 
     # Save the parameters of the final network to disk
     # neural_network.save("some_folder")
 
-def train_hyperpar_opt(fnc: str, cfg: str, count: int):
+def train_hyperpar_opt(fnc: str, cfg: str, count: int) -> tuple[list, list, float]:
     sweep_config = {
         "method": "bayes",
         "metric": {
@@ -561,11 +563,11 @@ def train_hyperpar_opt(fnc: str, cfg: str, count: int):
         "parameters": {
             "learning_rate": {
                 "distribution": "log_uniform_values",
-                "min": 0.25,
+                "min": 0.1,
                 "max": 1,
             },
             "optimizer": {
-                "value": "sgd"
+                "value": "adam"
                 #can be either sgd or adam
             },
             "activation_function": {
@@ -590,24 +592,40 @@ def train_hyperpar_opt(fnc: str, cfg: str, count: int):
                 all_configs.append(file_data)
     best_config = min(all_configs, key=lambda x: x["min_loss"])
 
-    train(learning_rate=best_config["learning_rate"], activation_function=fnc, layers=cfg)
+    return train(learning_rate=best_config["learning_rate"], activation_function=fnc, layers=cfg)
 
 if __name__ == "__main__":
-    HYPEROPT_COUNT = 10
-    test_functions = ["identity", "relu", "logi", "softmax", "tanh", "sin", "silu", "softsign", "softplus", "erf"]
+    test_functions = ["identity", "relu", "logi", "tanh", "sin", "silu", "softsign", "softplus", "erf"]
     layer_configurations = [
         # deep narrow
         "784-256-128-64-10",
         # deep wide
-        "784-256-8192-128-64-10",
+        #"784-8192-128-64-10",
         # shallow narrow
         "784-10",
         # shallow wide
-        "784-8192-10",
+        #"784-8192-10",
     ] # first layer should always be 784, last layer should always be 10.
 
-    with tqdm(total=len(layer_configurations)*len(test_functions)) as pbar:
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            futures = [executor.submit(train_hyperpar_opt, fn, layer_config, HYPEROPT_COUNT) for layer_config in layer_configurations for fn in test_functions]
-            for future in concurrent.futures.as_completed(futures):
-                pbar.update(1)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=64) as executor:
+        futures = []
+        future_to_fn_cfg = {}
+        fn_cfg_to_val_losses = {}
+        for layer_config in layer_configurations:
+            for fn in test_functions:
+                futures.append(executor.submit(train_hyperpar_opt, fn, layer_config, HYPEROPT_COUNT))
+                future_to_fn_cfg[futures[-1]] = (fn,layer_config)
+        for future in concurrent.futures.as_completed(futures):
+            _, val_losses, _ = future.result()
+            fn_cfg_to_val_losses[future_to_fn_cfg[future]] = val_losses
+        
+    concurrent.futures.wait(futures)
+        
+    for layer_config in layer_configurations:
+        plt.figure()
+        plt.title(f"Validation losses of all tested activation functions on {layer_config}")
+        for fn in test_functions:
+            N = len(fn_cfg_to_val_losses[(fn,layer_config)])
+            plt.semilogy(range(1,N+1), fn_cfg_to_val_losses[((fn,layer_config))], label=f"{fn}")
+        plt.legend()
+        plt.savefig(f"figures/results/val_losses_{layer_config}.png")

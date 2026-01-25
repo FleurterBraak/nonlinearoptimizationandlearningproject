@@ -4,12 +4,12 @@ from supplementary import Value
 
 
 def weight_init_function(layer_size1: int, layer_size2: int, x):
-    return np.random.uniform(-1, 1, (layer_size1, layer_size2))
-
+    #return np.random.uniform(-1, 1, (layer_size1, layer_size2))
+    return np.random.normal(0,x,(layer_size1, layer_size2))
 
 def bias_init_function(layer_size: int, x):
-    return np.random.uniform(-1, 1, layer_size)
-
+    #return np.random.uniform(-1, 1, layer_size)
+    return np.random.normal(0,x,layer_size)
 
 class NeuralNetwork:
     r"""Neural network class.
@@ -35,14 +35,14 @@ class NeuralNetwork:
         for i, size in enumerate(layers):
             if i > 0:
                 self.biases.append(
-                    Value(data=bias_init_function(layer_size=size, x=np.sqrt(6 / (layers[0] + layers[-1]))), expr=f"$b^{{{i}}}$")
+                    Value(data=bias_init_function(layer_size=size, x=np.sqrt(2 / (layers[0] + layers[-1]))), expr=f"$b^{{{i}}}$")
                 )
                 self.bias_cache.append(np.zeros(shape=size, dtype=np.float64))
                 self.bias_momentum.append(np.zeros(shape=size, dtype=np.float64))
             if i < self.number_of_layers:
                 # We initialize the weights transposed
                 self.weights.append(
-                    Value(weight_init_function(layer_size1=size, layer_size2=layers[i+1], x=np.sqrt(6 / (layers[0] + layers[-1]))), expr=f"$(W^T)^{{{i}}}$")
+                    Value(weight_init_function(layer_size1=size, layer_size2=layers[i+1], x=np.sqrt(2 / (layers[0] + layers[-1]))), expr=f"$(W^T)^{{{i}}}$")
                 )
                 self.weight_cache.append(np.zeros(shape=(size,layers[i+1]), dtype=np.float64))
                 self.weight_momentum.append(np.zeros(shape=(size,layers[i+1]), dtype=np.float64))
@@ -80,13 +80,15 @@ class NeuralNetwork:
             v_bar = self.weight_momentum[i] / (1 - self.beta1 ** self.adam_iteration)
             self.weight_cache[i] = self.beta2*self.weight_cache[i] + (1-self.beta2) * weight.grad ** 2
             c_bar = self.weight_cache[i] / (1 - self.beta2 ** self.adam_iteration)
-            weight.data -= learning_rate / (EPSILON + c_bar) * v_bar
+            epsi = EPSILON * np.ones_like(weight)
+            weight.data -= learning_rate / (epsi + c_bar) * v_bar
         for i, bias in enumerate(self.biases):
             self.bias_momentum[i] = self.beta1*self.bias_momentum[i] + (1-self.beta1) * bias.grad
             v_bar = self.bias_momentum[i] / (1 - self.beta1 ** self.adam_iteration)
             self.bias_cache[i] = self.beta2*self.bias_cache[i] + (1-self.beta2) * bias.grad ** 2
             c_bar = self.bias_cache[i] / (1 - self.beta2 ** self.adam_iteration)
-            bias.data -= learning_rate / (EPSILON + c_bar) * v_bar
+            epsi = EPSILON * np.ones_like(bias)
+            bias.data -= learning_rate / (epsi + c_bar) * v_bar
         self.adam_iteration += 1
 
     def save(self, path):
