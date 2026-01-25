@@ -57,10 +57,10 @@ test_dataset = list(zip(test_images, test_labels))
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True, drop_last=False)
 test_dataset_size = len(test_dataset)
 
-MAX_EPOCHS = 64 # amount of epochs after which to terminate the train() function if loss threshold is not reached
-HYPEROPT_EPOCHS = 16 # amount of epochs for hyperparameter optimization
+MAX_EPOCHS = 100 # amount of epochs after which to terminate the train() function if loss threshold is not reached
+HYPEROPT_EPOCHS = 12 # amount of epochs for hyperparameter optimization
 HYPEROPT_COUNT = 8 # amount of times to do hyperparameter optimization for a specific network
-LOSS_THRESHOLD = 150 # loss threshold for train() function
+LOSS_THRESHOLD = 140 # loss threshold for train() function
 
 def train_wandb(config=None):
     with wandb.init(config=config, project="NO&L Project", entity="jelle-roessink-university-of-twente") as run:
@@ -631,5 +631,6 @@ if __name__ == "__main__":
         for fn in test_functions:
             N = len(fn_cfg_to_val_losses[(fn,layer_config)])
             plt.semilogy(range(1,N+1), fn_cfg_to_val_losses[((fn,layer_config))], label=f"{fn}")
+        plt.axhline(y=LOSS_THRESHOLD)
         plt.legend()
         plt.savefig(f"figures/results/val_losses_{layer_config}.png")
