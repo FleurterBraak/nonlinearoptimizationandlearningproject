@@ -35,6 +35,16 @@ def logi(x: Value) -> Value:
     result._backward_gradient_step = _backward_gradient_step
     return result
 
+def step(x: Value) -> Value:
+    data = np.heaviside(x.data, 1)
+    result = Value(data, f"step({x.expr})", (x,))
+
+    def _backward_gradient_step():
+        pass
+    
+    result._backward_gradient_step = _backward_gradient_step
+    return result
+
 
 def softmax(x: Value) -> Value:
     #exp_x = np.exp(x.data)

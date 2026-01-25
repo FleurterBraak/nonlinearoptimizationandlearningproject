@@ -73,6 +73,8 @@ def train_wandb(config=None):
                 activation_function = relu
             case "logi":
                 activation_function = logi
+            case "step":
+                activation_function = step
             case "softmax":
                 activation_function = softmax
             case "tanh":
@@ -273,6 +275,8 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
                 activation_function = relu
             case "logi":
                 activation_function = logi
+            case "step":
+                activation_function = step
             case "softmax":
                 activation_function = softmax
             case "tanh":
@@ -595,7 +599,7 @@ def train_hyperpar_opt(fnc: str, cfg: str, count: int) -> tuple[list, list, floa
     return train(learning_rate=best_config["learning_rate"], activation_function=fnc, layers=cfg)
 
 if __name__ == "__main__":
-    test_functions = ["identity", "relu", "logi", "tanh", "sin", "silu", "softsign", "softplus", "erf"]
+    test_functions = ["identity", "relu", "logi", "step", "tanh", "sin", "silu", "softsign", "softplus", "erf"]
     layer_configurations = [
         # deep narrow
         "784-256-128-64-10",
