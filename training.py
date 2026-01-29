@@ -59,8 +59,8 @@ test_dataset_size = len(test_dataset)
 
 MAX_EPOCHS = 100 # amount of epochs after which to terminate the train() function if loss threshold is not reached
 HYPEROPT_EPOCHS = 12 # amount of epochs for hyperparameter optimization
-HYPEROPT_COUNT = 8 # amount of times to do hyperparameter optimization for a specific network
-LOSS_THRESHOLD = 140 # loss threshold for train() function
+HYPEROPT_COUNT = 10 # amount of times to do hyperparameter optimization for a specific network
+LOSS_THRESHOLD = 25 # loss threshold for train() function
 
 def train_wandb(config=None):
     with wandb.init(config=config, project="NO&L Project", entity="jelle-roessink-university-of-twente") as run:
@@ -263,7 +263,7 @@ def train_wandb(config=None):
 
         run.finish()
 
-def train(learning_rate: float, activation_function: typing.Callable | str, layers: list | str) -> tuple[list, list, float]:
+def train(learning_rate: float, activation_function: typing.Callable | str, layers: list | str) -> tuple[list, list, float, list, list, float, int]:
     optimizer = "adam"
     if isinstance(layers, str):
         layers = list(map(int, layers.split("-")))
@@ -319,14 +319,14 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
     validation_losses = []
     train_accuracies = []
     validation_accuracies = []
-    while epoch < MAX_EPOCHS and (validation_losses[-1] > LOSS_THRESHOLD if validation_losses != [] else True):
+    while epoch <= MAX_EPOCHS and (validation_losses[-1] >= LOSS_THRESHOLD if validation_losses != [] else True):
         # (Re)set the training loss for this epoch.
         train_loss = 0.0
         correctly_classified = 0
-        for batch in tqdm(train_loader, desc=f"training epoch {epoch}"):
+        for batch in train_loader:
             # Reset the gradients so that we start fresh.
             neural_network.reset_gradients()
-            neural_network.reset_adam()
+            #neural_network.reset_adam()
 
             # Get the images and labels from the batch
             images = np.vstack([image for (image, _) in batch])
@@ -378,7 +378,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
         validation_loss = 0.0
         correctly_classified = 0
-        for batch in tqdm(validation_loader, desc=f"validation epoch {epoch}"):
+        for batch in validation_loader:
             # Get the images and labels from the batch
             images = np.vstack([image for (image, _) in batch])
             labels = np.vstack([label for (_, label) in batch])
@@ -455,6 +455,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
     figure.tight_layout()
     plt.savefig(f"figures/loss/train_val_loss_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
+    plt.close()
 
 
     # Plot of train vs test accuracies on the same axes
@@ -483,6 +484,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
     figure.tight_layout()
 
     plt.savefig(f"figures/acc/train_test_acc_lr_{learning_rate}_fn_{activation_function.__name__}_lay_{layers}.png")
+    plt.close()
 
 
 
@@ -523,6 +525,7 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
 
     #print(f"test loss:      {test_loss}")
     #print(f"test accuraccy: {correctly_classified / test_dataset_size}")
+    test_accuracy = correctly_classified / test_dataset_size
 
     # We take a random starting point for 10 subsequent images we want to take a greater look at.
     #r = np.random.randint(0, 9_990)
@@ -552,12 +555,16 @@ def train(learning_rate: float, activation_function: typing.Callable | str, laye
     #plt.subplots_adjust(hspace=.8)
     #plt.show()
 
-    return train_losses, validation_losses, test_loss
+    return train_losses, validation_losses, test_loss, train_accuracies, validation_accuracies, test_accuracy, epoch
 
     # Save the parameters of the final network to disk
-    # neural_network.save("some_folder")
+    savepath = f"saved_networks/lr_{learning_rate}_fn_{activation_function.__name__}_layer_{layers}"
+    import os
+    if not os.path.exists(savepath):
+        os.makedirs(savepath)
+    neural_network.save(savepath)
 
-def train_hyperpar_opt(fnc: str, cfg: str, count: int) -> tuple[list, list, float]:
+def train_hyperpar_opt(fnc: str, cfg: str, count: int) -> tuple[list, list, float, list, list, float, int]:
     sweep_config = {
         "method": "bayes",
         "metric": {
@@ -567,8 +574,8 @@ def train_hyperpar_opt(fnc: str, cfg: str, count: int) -> tuple[list, list, floa
         "parameters": {
             "learning_rate": {
                 "distribution": "log_uniform_values",
-                "min": 0.1,
-                "max": 1,
+                "min": 1e-5,
+                "max": 1e-1,
             },
             "optimizer": {
                 "value": "adam"
@@ -584,9 +591,9 @@ def train_hyperpar_opt(fnc: str, cfg: str, count: int) -> tuple[list, list, floa
         }
     }
 
-    #do hyperparameter optimization for all of these to find best learning rate
-    sweep_id = wandb.sweep(sweep_config, project="NO&L Project", entity="jelle-roessink-university-of-twente")
-    wandb.agent(sweep_id, train_wandb, count=count)
+    # do hyperparameter optimization for all of these to find best learning rate
+    #sweep_id = wandb.sweep(sweep_config, project="NO&L Project", entity="jelle-roessink-university-of-twente")
+    #wandb.agent(sweep_id, train_wandb, count=count)
 
     all_configs = []
     for path in Path("saved_configs").glob('*.json'):
@@ -607,30 +614,86 @@ if __name__ == "__main__":
         #"784-8192-128-64-10",
         # shallow narrow
         "784-10",
+        "784-128-10",
         # shallow wide
         #"784-8192-10",
     ] # first layer should always be 784, last layer should always be 10.
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=64) as executor:
-        futures = []
-        future_to_fn_cfg = {}
-        fn_cfg_to_val_losses = {}
-        for layer_config in layer_configurations:
-            for fn in test_functions:
-                futures.append(executor.submit(train_hyperpar_opt, fn, layer_config, HYPEROPT_COUNT))
-                future_to_fn_cfg[futures[-1]] = (fn,layer_config)
-        for future in concurrent.futures.as_completed(futures):
-            _, val_losses, _ = future.result()
-            fn_cfg_to_val_losses[future_to_fn_cfg[future]] = val_losses
-        
-    concurrent.futures.wait(futures)
-        
-    for layer_config in layer_configurations:
-        plt.figure()
-        plt.title(f"Validation losses of all tested activation functions on {layer_config}")
-        for fn in test_functions:
-            N = len(fn_cfg_to_val_losses[(fn,layer_config)])
-            plt.semilogy(range(1,N+1), fn_cfg_to_val_losses[((fn,layer_config))], label=f"{fn}")
-        plt.axhline(y=LOSS_THRESHOLD)
-        plt.legend()
-        plt.savefig(f"figures/results/val_losses_{layer_config}.png")
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        with tqdm(total=len(layer_configurations)*len(test_functions), leave=False) as process:
+            futures = []
+            future_to_fn_cfg = {}
+            fn_cfg_to_val_losses = {}
+            fn_cfg_to_val_acc = {}
+            fn_cfg_to_final_epoch = {}
+            for layer_config in layer_configurations:
+                for fn in test_functions:
+                    future = executor.submit(train_hyperpar_opt, fn, layer_config, HYPEROPT_COUNT)
+                    #futures.append(executor.submit(train, 3e-3, fn, layer_config))
+                    futures.append(future)
+                    future.add_done_callback(lambda _: process.update())
+                    future_to_fn_cfg[futures[-1]] = (fn,layer_config)
+            for future in concurrent.futures.as_completed(futures):
+                _, val_losses, _, _, val_acc, _, epoch = future.result()
+                fn_cfg_to_val_losses[future_to_fn_cfg[future]] = val_losses
+                fn_cfg_to_val_acc[future_to_fn_cfg[future]] = val_acc
+                fn_cfg_to_final_epoch[future_to_fn_cfg[future]] = epoch
+            
+            concurrent.futures.wait(futures)
+
+            for layer_config in layer_configurations:
+                plt.figure()
+                plt.title(f"Validation losses of all tested activation functions on {layer_config}")
+                for fn in test_functions:
+                    N = len(fn_cfg_to_val_losses[(fn,layer_config)])
+                    plt.semilogy(range(1,N+1), fn_cfg_to_val_losses[(fn,layer_config)], label=f"{fn}")
+                    print(f"Layers: {layer_config}, function: {fn}")
+                    print(f"minimal loss: {min(fn_cfg_to_val_losses[(fn,layer_config)])}, final loss: {fn_cfg_to_val_losses[(fn,layer_config)][-1]}")
+                    print(f"maximum accuracy: {max(fn_cfg_to_val_acc[(fn,layer_config)])}, final accuracy: {fn_cfg_to_val_acc[(fn,layer_config)][-1]}")
+                    print(f"stopping epoch: {fn_cfg_to_final_epoch[(fn,layer_config)]}")
+                plt.axhline(y=LOSS_THRESHOLD, linestyle="--", label=f"loss threshold: {LOSS_THRESHOLD}")
+                plt.xlabel("Epochs")
+                plt.ylabel("Loss")
+                plt.legend()
+                plt.savefig(f"figures/results/val_losses_{layer_config}.png")
+                plt.close()
+
+                plt.figure()
+                plt.title(f"Validation accuracies of all tested activation functions on {layer_config}")
+                for fn in test_functions:
+                    N = len(fn_cfg_to_val_losses[(fn,layer_config)])
+                    plt.semilogy(range(1,N+1), fn_cfg_to_val_acc[(fn,layer_config)], label=f"{fn}")
+                plt.xlabel("Epochs")
+                plt.ylabel("Accuracy")
+                plt.legend()
+                plt.savefig(f"figures/results/val_acc_{layer_config}.png")
+                plt.close()
+                
+            for layer_config in layer_configurations:
+                plt.figure()
+                plt.title(f"Validation losses of all tested activation functions on {layer_config}")
+                for fn in test_functions:
+                    if fn != "identity" or fn != "step":
+                        N = len(fn_cfg_to_val_losses[(fn,layer_config)])
+                        plt.semilogy(range(1,N+1), fn_cfg_to_val_losses[(fn,layer_config)], label=f"{fn}")
+                        print(f"Layers: {layer_config}, function: {fn}")
+                        print(f"minimal loss: {min(fn_cfg_to_val_losses[(fn,layer_config)])}, final loss: {fn_cfg_to_val_losses[(fn,layer_config)][-1]}")
+                        print(f"maximum accuracy: {max(fn_cfg_to_val_acc[(fn,layer_config)])}, final accuracy: {fn_cfg_to_val_acc[(fn,layer_config)][-1]}")
+                        print(f"stopping epoch: {fn_cfg_to_final_epoch[(fn,layer_config)]}")
+                plt.axhline(y=LOSS_THRESHOLD, linestyle="--", label=f"loss threshold: {LOSS_THRESHOLD}")
+                plt.xlabel("Epochs")
+                plt.ylabel("Loss")
+                plt.legend()
+                plt.savefig(f"figures/results/val_losses_noid_nostep_{layer_config}.png")
+                plt.close()
+
+                plt.figure()
+                plt.title(f"Validation accuracies of all tested activation functions on {layer_config}")
+                for fn in test_functions:
+                    N = len(fn_cfg_to_val_losses[(fn,layer_config)])
+                    plt.semilogy(range(1,N+1), fn_cfg_to_val_acc[(fn,layer_config)], label=f"{fn}")
+                plt.xlabel("Epochs")
+                plt.ylabel("Accuracy")
+                plt.legend()
+                plt.savefig(f"figures/results/val_acc_noid_nostep_{layer_config}.png")
+                plt.close()
